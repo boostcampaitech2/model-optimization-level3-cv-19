@@ -20,6 +20,10 @@ from src.augmentation.policies import simple_augment_test
 from src.model import Model
 from src.utils.common import read_yaml
 
+import torch.nn as nn
+
+from custom_model import CustomVGG
+
 if torch.__version__ >= "1.8.1":
     from torch import profiler
 else:
@@ -192,7 +196,11 @@ if __name__ == "__main__":
         )
         model = model_instance.model
     else:
-        model = models.vgg11()           
+        model = models.vgg11()  
+        model.features = model.features[:16]
+        model.classifier = nn.Linear(1 * 512 * 7 * 7, 6)
+        print(model)
+        
         model.load_state_dict(
             torch.load(args.weight, map_location=torch.device("cpu"))
         )        

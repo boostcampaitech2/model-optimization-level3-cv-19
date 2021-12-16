@@ -21,6 +21,7 @@ from src.trainer import TorchTrainer
 from src.utils.common import get_label_counts, read_yaml
 from src.utils.torch_utils import check_runtime, model_info
 
+from custom_model import CustomVGG
 
 def train(
     model_config: Dict[str, Any],
@@ -42,7 +43,11 @@ def train(
     use_pytorch_model = True
 
     if use_pytorch_model:
-        model = models.vgg11(pretrained=True).to(device)
+        model = models.vgg11(pretrained=True)
+        model.features = model.features[:16]
+        model.classifier = nn.Linear(1 * 512 * 7 * 7, 6)
+        
+        model.to(device)
         print(model)
     else:
         model_instance = Model(model_config, verbose=True)
