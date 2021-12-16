@@ -7,6 +7,9 @@ pip install -r requirements.txt
 ```
 
 # Run
+## 0. symbolic link
+ln -s code_t2045 code
+<br>
 ## 1. train
 python train.py  (default)
 <br>
