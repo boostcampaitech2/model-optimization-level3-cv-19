@@ -11,6 +11,7 @@ from typing import Any, Dict, Tuple, Union
 import torch
 import torch.nn as nn
 import torch.optim as optim
+import torchvision.models as models
 import yaml
 
 from src.dataloader import create_dataloader
@@ -35,29 +36,41 @@ def train(
     with open(os.path.join(log_dir, "model.yml"), "w") as f:
         yaml.dump(model_config, f, default_flow_style=False)
 
-    model_instance = Model(model_config, verbose=True)
     model_path = os.path.join(log_dir, "best.pt")
     print(f"Model save path: {model_path}")
-    if os.path.isfile(model_path):
-        model_instance.model.load_state_dict(
-            torch.load(model_path, map_location=device)
-        )
-    model_instance.model.to(device)
+        
+    use_pytorch_model = True
+
+    if use_pytorch_model:
+        model = models.vgg11(pretrained=True).to(device)
+        print(model)
+    else:
+        model_instance = Model(model_config, verbose=True)
+        if os.path.isfile(model_path):
+            model_instance.model.load_state_dict(
+                torch.load(model_path, map_location=device)
+            )        
+        model_instance.model.to(device)
 
     # Create dataloader
     train_dl, val_dl, test_dl = create_dataloader(data_config)
 
     # Create optimizer, scheduler, criterion
-    optimizer = torch.optim.SGD(
-        model_instance.model.parameters(), lr=data_config["INIT_LR"], momentum=0.9
-    )
-    scheduler = torch.optim.lr_scheduler.OneCycleLR(
-        optimizer=optimizer,
-        max_lr=data_config["INIT_LR"],
-        steps_per_epoch=len(train_dl),
-        epochs=data_config["EPOCHS"],
-        pct_start=0.05,
-    )
+    if use_pytorch_model:
+        optimizer = torch.optim.AdamW(params=model.parameters(), lr=0.0001, weight_decay=1e-6)
+        scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=10)
+    else:
+        optimizer = torch.optim.SGD(
+            model_instance.model.parameters(), lr=data_config["INIT_LR"], momentum=0.9
+        )
+    
+        scheduler = torch.optim.lr_scheduler.OneCycleLR(
+            optimizer=optimizer,
+            max_lr=data_config["INIT_LR"],
+            steps_per_epoch=len(train_dl),
+            epochs=data_config["EPOCHS"],
+            pct_start=0.05,
+        )
     criterion = CustomCriterion(
         samples_per_cls=get_label_counts(data_config["DATA_PATH"])
         if data_config["DATASET"] == "TACO"
@@ -68,18 +81,19 @@ def train(
     scaler = (
         torch.cuda.amp.GradScaler() if fp16 and device != torch.device("cpu") else None
     )
-
+    
     # Create trainer
     trainer = TorchTrainer(
-        model=model_instance.model,
-        criterion=criterion,
-        optimizer=optimizer,
-        scheduler=scheduler,
-        scaler=scaler,
-        device=device,
-        model_path=model_path,
-        verbose=1,
+    model=model if use_pytorch_model else model_instance.model,
+    criterion=criterion,
+    optimizer=optimizer,
+    scheduler=scheduler,
+    scaler=scaler,
+    device=device,
+    model_path=model_path,
+    verbose=1,
     )
+    
     best_acc, best_f1 = trainer.train(
         train_dataloader=train_dl,
         n_epoch=data_config["EPOCHS"],
@@ -87,10 +101,15 @@ def train(
     )
 
     # evaluate model with test set
-    model_instance.model.load_state_dict(torch.load(model_path))
+    if use_pytorch_model:
+        model.load_state_dict(torch.load(model_path))
+    else:
+        model_instance.model.load_state_dict(torch.load(model_path))
+
     test_loss, test_f1, test_acc = trainer.test(
-        model=model_instance.model, test_dataloader=val_dl if val_dl else test_dl
+    model=model if use_pytorch_model else model_instance.model, test_dataloader=val_dl if val_dl else test_dl
     )
+    
     return test_loss, test_f1, test_acc
 
 

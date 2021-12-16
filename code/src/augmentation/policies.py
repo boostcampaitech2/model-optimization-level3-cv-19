@@ -30,7 +30,10 @@ def simple_augment_train(
             transforms.RandomResizedCrop(
                 size=img_size, ratio=(0.75, 1.0, 1.3333333333333333)
             ),
+            transforms.RandomVerticalFlip(),  #new
             transforms.RandomHorizontalFlip(),
+            transforms.RandomRotation((-180, 180)),   #new
+            
             transforms.ToTensor(),
             transforms.Normalize(
                 DATASET_NORMALIZE_INFO[dataset]["MEAN"],
@@ -55,7 +58,7 @@ def simple_augment_test(
             ),
         ]
     )
-
+    
 
 def randaugment_train(
     dataset: str = "CIFAR10",

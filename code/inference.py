@@ -13,6 +13,7 @@ import torch
 from torch.utils.data import DataLoader
 from torchvision.datasets import ImageFolder
 from torchvision.transforms import Resize
+import torchvision.models as models
 from tqdm import tqdm
 
 from src.augmentation.policies import simple_augment_test
@@ -33,6 +34,15 @@ CLASSES = [
     "Styrofoam",
 ]
 
+#from src.augmentation.transforms import SquarePad
+import numpy as np
+DATASET_NORMALIZE_INFO = {
+    "CIFAR10": {"MEAN": (0.4914, 0.4822, 0.4465), "STD": (0.2470, 0.2435, 0.2616)},
+    "CIFAR100": {"MEAN": (0.5071, 0.4865, 0.4409), "STD": (0.2673, 0.2564, 0.2762)},
+    "IMAGENET": {"MEAN": (0.485, 0.456, 0.406), "STD": (0.229, 0.224, 0.225)},
+    "TACO": {"MEAN": (0.485, 0.456, 0.406), "STD": (0.229, 0.224, 0.225)},
+}
+    
 
 class CustomImageFolder(ImageFolder):
     """ImageFolder with filename."""
@@ -61,9 +71,10 @@ def get_dataloader(img_root: str, data_config: str) -> DataLoader:
         __import__("src.augmentation.policies", fromlist=[""]),
         data_config["AUG_TEST"],
     )(dataset=data_config["DATASET"], img_size=data_config["IMG_SIZE"])
-
+    
     dataset = CustomImageFolder(root=img_root, transform=transform_test)
     dataloader = DataLoader(dataset=dataset, batch_size=1, num_workers=8)
+
     return dataloader
 
 
@@ -82,9 +93,10 @@ def inference(model, dataloader, dst_path: str, t0: float) -> None:
     model.eval()
 
     profile_ = torch.rand(1, 3, 512, 512).to(device)
+
     for transform in dataloader.dataset.transform.transforms:
         if isinstance(transform, Resize):
-            profile_input = torch.rand(1, 3, *transform.size).to(device)
+            profile_input = torch.rand(1, 3, *transform.size).to(device)            
             break
 
     n_profile = 100
@@ -168,15 +180,23 @@ if __name__ == "__main__":
     # prepare datalaoder
     dataloader = get_dataloader(img_root=args.img_root, data_config=args.data_config)
 
+    use_pytorch_model = True   
+
     # prepare model
     if args.weight.endswith("ts"):
         model = torch.jit.load(args.weight)
-    else:
+    elif not use_pytorch_model:
         model_instance = Model(args.model_config, verbose=True)
         model_instance.model.load_state_dict(
             torch.load(args.weight, map_location=torch.device("cpu"))
         )
         model = model_instance.model
+    else:
+        model = models.vgg11()           
+        model.load_state_dict(
+            torch.load(args.weight, map_location=torch.device("cpu"))
+        )        
+        
 
     # inference
     inference(model, dataloader, args.dst, t0)
