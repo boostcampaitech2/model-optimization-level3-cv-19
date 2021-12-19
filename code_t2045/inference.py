@@ -22,8 +22,6 @@ from src.utils.common import read_yaml
 
 import torch.nn as nn
 
-from custom_model import CustomVGG
-
 if torch.__version__ >= "1.8.1":
     from torch import profiler
 else:
