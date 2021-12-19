@@ -21,8 +21,6 @@ from src.trainer import TorchTrainer
 from src.utils.common import get_label_counts, read_yaml
 from src.utils.torch_utils import check_runtime, model_info
 
-from custom_model import CustomVGG
-
 def train(
     model_config: Dict[str, Any],
     data_config: Dict[str, Any],
